@@ -30,6 +30,11 @@ yarn-error.log*
 next-env.d.ts
 
 # private assets (kept out of the repo on purpose — see public/models/README.md)
+# whole private folders — never versioned (CLAUDE.md §2, §17)
+/public/models/private/
+/public/audio/private/
+/public/references/
+# loose assets anywhere under these folders
 /public/models/*.vrm
 /public/animations/*.vrma
 /public/animations/*.fbx
