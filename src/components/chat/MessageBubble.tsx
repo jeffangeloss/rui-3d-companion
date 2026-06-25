@@ -6,9 +6,7 @@ export default function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
 
   return (
-    <div
-      className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}
-    >
+    <div className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}>
       <div
         className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
           isUser
@@ -17,8 +15,13 @@ export default function MessageBubble({ message }: { message: ChatMessage }) {
         }`}
       >
         {!isUser && (
-          <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wider text-stage-accent">
+          <span className="mb-0.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-stage-accent">
             Rui
+            {message.demo && (
+              <span className="rounded-full bg-stage-spot/20 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-stage-spot">
+                demo
+              </span>
+            )}
           </span>
         )}
         {message.content}

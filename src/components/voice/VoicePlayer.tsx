@@ -2,18 +2,28 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useCompanionStore } from "@/store/companion-store";
-import { synthesizeSpeech } from "@/lib/voice";
+import {
+  synthesizeSpeech,
+  speakWithBrowserTTS,
+  isBrowserTtsAvailable,
+  BrowserTtsHandle,
+} from "@/lib/voice";
 import { VolumeLipSync } from "@/lib/lipsync";
 import LipSyncController from "./LipSyncController";
 
 /**
- * Watches the transcript and, when voice is enabled, speaks each new assistant
- * message with Piper (via /api/tts). During playback it builds a VolumeLipSync
- * graph and hands it to <LipSyncController/> so Rui's mouth tracks the audio.
+ * Speaks each new assistant message when voice is enabled, choosing an engine:
+ *
+ *  - **Piper** (default): high-quality local TTS via /api/tts, with accurate
+ *    volume-based lip sync (VolumeLipSync + LipSyncController).
+ *  - **Browser** (demo mode, or automatic fallback when Piper is unreachable):
+ *    Web Speech API with a simple time-based mouth oscillation so the avatar
+ *    still "talks". This makes voice work with zero setup.
  */
 export default function VoicePlayer() {
   const messages = useCompanionStore((s) => s.messages);
   const voiceEnabled = useCompanionStore((s) => s.voiceEnabled);
+  const demoMode = useCompanionStore((s) => s.demoMode);
   const setStatus = useCompanionStore((s) => s.setStatus);
   const setMouthOpen = useCompanionStore((s) => s.setMouthOpen);
 
@@ -23,6 +33,8 @@ export default function VoicePlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastSpokenId = useRef<string | null>(null);
   const urlRef = useRef<string | null>(null);
+  const browserHandle = useRef<BrowserTtsHandle | null>(null);
+  const oscRaf = useRef<number | null>(null);
 
   // Keep a stable audio element across renders.
   useEffect(() => {
@@ -31,9 +43,59 @@ export default function VoicePlayer() {
     audioRef.current = audio;
     return () => {
       audio.pause();
+      stopBrowserSpeech();
       if (urlRef.current) URL.revokeObjectURL(urlRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Stop everything if voice is turned off mid-utterance.
+  useEffect(() => {
+    if (!voiceEnabled) {
+      audioRef.current?.pause();
+      stopBrowserSpeech();
+      setStatus("idle");
+      setMouthOpen(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceEnabled]);
+
+  function stopBrowserSpeech() {
+    browserHandle.current?.cancel();
+    browserHandle.current = null;
+    if (oscRaf.current != null) {
+      cancelAnimationFrame(oscRaf.current);
+      oscRaf.current = null;
+    }
+  }
+
+  /** Drive a believable mouth flap from a clock while the browser TTS speaks. */
+  function startMouthOscillation() {
+    const start =
+      typeof performance !== "undefined" ? performance.now() : 0;
+    const loop = () => {
+      const now =
+        typeof performance !== "undefined" ? performance.now() : 0;
+      const t = (now - start) / 1000;
+      const v = 0.35 + 0.3 * Math.sin(t * 11) + 0.2 * Math.sin(t * 6.5);
+      setMouthOpen(Math.min(1, Math.max(0, v)));
+      oscRaf.current = requestAnimationFrame(loop);
+    };
+    oscRaf.current = requestAnimationFrame(loop);
+  }
+
+  function speakBrowser(text: string) {
+    setStatus("speaking");
+    startMouthOscillation();
+    browserHandle.current = speakWithBrowserTTS(text, {
+      onEnd: () => {
+        stopBrowserSpeech();
+        setMouthOpen(0);
+        setStatus("idle");
+      },
+      onError: () => setError("La voz del navegador no está disponible."),
+    });
+  }
 
   useEffect(() => {
     if (!voiceEnabled) return;
@@ -49,16 +111,28 @@ export default function VoicePlayer() {
     }
     lastSpokenId.current = last.id;
 
+    const text = stripStageDirections(last.content);
+    if (!text) return;
+
     let cancelled = false;
     const controller = new AbortController();
 
     (async () => {
+      setError(null);
+
+      // Demo mode → browser TTS directly (no backend needed).
+      if (demoMode) {
+        if (!isBrowserTtsAvailable()) {
+          setError("Tu navegador no soporta voz (Web Speech API).");
+          return;
+        }
+        speakBrowser(text);
+        return;
+      }
+
+      // Otherwise try Piper; fall back to browser TTS on any failure.
       try {
-        setError(null);
-        const { url } = await synthesizeSpeech(
-          stripStageDirections(last.content),
-          controller.signal
-        );
+        const { url } = await synthesizeSpeech(text, controller.signal);
         if (cancelled) {
           URL.revokeObjectURL(url);
           return;
@@ -69,38 +143,28 @@ export default function VoicePlayer() {
         urlRef.current = url;
         audio.src = url;
 
-        // Build (or rebuild) the lip-sync graph for this element.
         const ls = new VolumeLipSync(audio);
         await ls.resume();
         setLipSync(ls);
         setStatus("speaking");
 
-        audio.onended = () => {
+        const cleanup = () => {
           setStatus("idle");
           setMouthOpen(0);
           ls.dispose();
           setLipSync(null);
         };
-        audio.onerror = () => {
-          setStatus("idle");
-          setMouthOpen(0);
-          ls.dispose();
-          setLipSync(null);
-        };
+        audio.onended = cleanup;
+        audio.onerror = cleanup;
 
-        await audio.play().catch((err) => {
-          // Autoplay blocked or context suspended.
-          setError("No pude reproducir la voz (¿permiso de audio?).");
-          setStatus("idle");
+        await audio.play().catch(() => {
           ls.dispose();
           setLipSync(null);
-          throw err;
+          // Autoplay blocked / context suspended → browser engine instead.
+          speakBrowser(text);
         });
-      } catch (err) {
-        if (!cancelled) {
-          setStatus("idle");
-          setError(err instanceof Error ? err.message : String(err));
-        }
+      } catch {
+        if (!cancelled) speakBrowser(text);
       }
     })();
 
@@ -108,7 +172,8 @@ export default function VoicePlayer() {
       cancelled = true;
       controller.abort();
     };
-  }, [messages, voiceEnabled, setStatus, setMouthOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, voiceEnabled, demoMode]);
 
   return (
     <>
@@ -120,7 +185,7 @@ export default function VoicePlayer() {
   );
 }
 
-/** Strip simple *stage directions* / emojis so Piper doesn't read them aloud. */
+/** Strip simple *stage directions* / emojis so TTS doesn't read them aloud. */
 function stripStageDirections(text: string): string {
   return text
     .replace(/\*[^*]+\*/g, " ")

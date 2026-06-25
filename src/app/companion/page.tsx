@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import AvatarControls from "@/components/avatar/AvatarControls";
 import AvatarExpressions from "@/components/avatar/AvatarExpressions";
 import ChatPanel from "@/components/chat/ChatPanel";
+import { useCompanionStore } from "@/store/companion-store";
 
 // The 3D scene touches WebGL/three.js, so render it client-side only.
 const AvatarScene = dynamic(
@@ -20,6 +22,12 @@ const AvatarScene = dynamic(
 );
 
 export default function CompanionPage() {
+  // Persisted state (transcript + settings) is hydrated client-side only,
+  // to avoid an SSR/client mismatch. See the store's skipHydration option.
+  useEffect(() => {
+    useCompanionStore.persist.rehydrate();
+  }, []);
+
   return (
     <main className="grid h-screen w-screen grid-cols-1 overflow-hidden lg:grid-cols-[1fr_minmax(340px,420px)]">
       {/* Stage */}

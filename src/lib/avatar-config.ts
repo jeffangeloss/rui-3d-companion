@@ -4,7 +4,7 @@
  */
 
 export const VRM_PATH =
-  process.env.NEXT_PUBLIC_VRM_PATH?.trim() || "/models/rui-local.vrm";
+  process.env.NEXT_PUBLIC_VRM_PATH?.trim() || "/models/private/rui-local.vrm";
 
 export interface CameraConfig {
   position: [number, number, number];

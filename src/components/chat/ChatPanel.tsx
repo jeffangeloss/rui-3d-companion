@@ -5,6 +5,7 @@ import { useCompanionStore } from "@/store/companion-store";
 import { useConversation } from "@/lib/use-conversation";
 import { MODE_LIST, COMPANION_MODES } from "@/lib/character-prompt";
 import MessageBubble from "./MessageBubble";
+import ServiceStatus from "./ServiceStatus";
 import VoicePlayer from "@/components/voice/VoicePlayer";
 import VoiceRecorder from "@/components/voice/VoiceRecorder";
 
@@ -15,6 +16,8 @@ export default function ChatPanel() {
   const setMode = useCompanionStore((s) => s.setMode);
   const voiceEnabled = useCompanionStore((s) => s.voiceEnabled);
   const setVoiceEnabled = useCompanionStore((s) => s.setVoiceEnabled);
+  const demoMode = useCompanionStore((s) => s.demoMode);
+  const setDemoMode = useCompanionStore((s) => s.setDemoMode);
   const clearMessages = useCompanionStore((s) => s.clearMessages);
 
   const { send } = useConversation();
@@ -54,6 +57,17 @@ export default function ChatPanel() {
         </div>
         <div className="flex items-center gap-1.5">
           <button
+            onClick={() => setDemoMode(!demoMode)}
+            title="Modo demo: responde sin Ollama"
+            className={`rounded-full px-2.5 py-1 text-xs transition ${
+              demoMode
+                ? "bg-stage-spot/25 text-stage-spot"
+                : "bg-white/5 text-white/50 hover:text-white"
+            }`}
+          >
+            🎭 Demo
+          </button>
+          <button
             onClick={() => setVoiceEnabled(!voiceEnabled)}
             title="Voz de Rui (TTS)"
             className={`rounded-full px-2.5 py-1 text-xs transition ${
@@ -90,6 +104,16 @@ export default function ChatPanel() {
             {m.label}
           </button>
         ))}
+      </div>
+
+      {/* Live service status */}
+      <div className="border-b border-white/10 px-3 py-2">
+        <ServiceStatus />
+        {demoMode && (
+          <p className="mt-1.5 text-[10px] text-stage-spot/80">
+            Modo demo activo — Rui responde con su cerebro de bolsillo, sin Ollama.
+          </p>
+        )}
       </div>
 
       {/* Messages */}

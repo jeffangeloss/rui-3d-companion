@@ -1,5 +1,7 @@
 # Rui — 3D Companion 🎭
 
+![CI](https://github.com/jeffangeloss/rui-3d-companion/actions/workflows/ci.yml/badge.svg)
+
 > **This is a private fan project for personal use only.**
 > **No official Project SEKAI assets, voices, models, or copyrighted materials are included in this repository.**
 
@@ -50,18 +52,33 @@ Everything runs **on your own machine**: the language model (Ollama), the voice
 # 1. Install dependencies
 npm install
 
-# 2. Configure your local services
-cp .env.example .env.local
-#    …then edit .env.local (Ollama model, Piper voice path, Whisper endpoint).
-
-# 3. Drop your private VRM model in place (kept out of git):
-#    public/models/rui-local.vrm
-#    See public/models/README.md for details.
-
-# 4. Run the dev server
+# 2. Run the dev server (works out of the box — see "Zero-setup demo" below)
 npm run dev
 # open http://localhost:3000
 ```
+
+To use the **real** local AI + voice instead of the demo brain:
+
+```bash
+# Configure your local services
+cp .env.example .env.local
+#   …then edit .env.local (Ollama model, Piper voice path, Whisper endpoint).
+
+# Drop your private VRM model in place (kept out of git):
+#   public/models/rui-local.vrm   — see public/models/README.md
+```
+
+### 🎭 Zero-setup demo
+
+Rui runs **with no backend at all**. Toggle **Demo** in the chat header (or just
+start chatting before Ollama is up) and Rui answers in-character from an offline
+"pocket brain" — mode-aware, no LLM required. The moment the live LLM is
+reachable it takes over automatically; if it goes down mid-conversation, Rui
+falls back to demo so the app never feels broken.
+
+The chat header also shows a **live status strip** (IA / Voz / Oído) backed by
+[`/api/health`](src/app/api/health/route.ts), so you can see at a glance which
+local services are connected.
 
 ### Local services you need running
 

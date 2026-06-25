@@ -75,6 +75,69 @@ async function safeError(res: Response): Promise<string> {
   }
 }
 
+// ── Browser TTS (Web Speech API) ───────────────────────────────────────────
+// Zero-setup fallback used by demo mode and when Piper is unreachable.
+
+export interface BrowserTtsHandle {
+  cancel: () => void;
+}
+
+export function isBrowserTtsAvailable(): boolean {
+  return typeof window !== "undefined" && "speechSynthesis" in window;
+}
+
+/** Best-effort pick of a Spanish voice (falls back to the default voice). */
+function pickSpanishVoice(): SpeechSynthesisVoice | undefined {
+  const voices = window.speechSynthesis.getVoices();
+  return (
+    voices.find((v) => /^es[-_]?/i.test(v.lang)) ||
+    voices.find((v) => v.lang.toLowerCase().startsWith("es"))
+  );
+}
+
+interface BrowserTtsCallbacks {
+  onStart?: () => void;
+  onEnd?: () => void;
+  onError?: (err: Error) => void;
+}
+
+/**
+ * Speak `text` with the browser's Web Speech API. Returns a handle whose
+ * cancel() stops playback. onEnd fires on both natural end and error so callers
+ * can always reset their speaking state.
+ */
+export function speakWithBrowserTTS(
+  text: string,
+  cb: BrowserTtsCallbacks = {}
+): BrowserTtsHandle {
+  if (!isBrowserTtsAvailable()) {
+    cb.onError?.(new Error("Web Speech API no disponible en este navegador"));
+    cb.onEnd?.();
+    return { cancel: () => undefined };
+  }
+
+  const synth = window.speechSynthesis;
+  synth.cancel(); // stop anything already queued
+
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = "es-ES";
+  const voice = pickSpanishVoice();
+  if (voice) utter.voice = voice;
+  utter.pitch = 1.15; // medium-high, theatrical
+  utter.rate = 1.0;
+  utter.volume = 1;
+
+  utter.onstart = () => cb.onStart?.();
+  utter.onend = () => cb.onEnd?.();
+  utter.onerror = () => {
+    cb.onError?.(new Error("speechSynthesis error"));
+    cb.onEnd?.();
+  };
+
+  synth.speak(utter);
+  return { cancel: () => synth.cancel() };
+}
+
 /** Pick a MediaRecorder mime type the current browser actually supports. */
 export function pickRecorderMimeType(): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;

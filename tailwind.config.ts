@@ -8,13 +8,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Rui's stage palette — warm spotlight + deep theatre curtain.
+        // Rui's canonical-inspired palette (see CLAUDE.md §11):
+        // lavender-purple primary, gold spotlight, cyan accents.
         stage: {
           bg: "#0e0a14",
           panel: "#171022",
-          accent: "#e85d9b",
-          accent2: "#7b5cff",
-          spot: "#ffd58a",
+          accent: "#BB88EE", // lavender-purple (primary)
+          accent2: "#2BC7D9", // cyan
+          spot: "#F7D84A", // gold
         },
       },
       fontFamily: {
